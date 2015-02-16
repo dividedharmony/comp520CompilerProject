@@ -174,7 +174,7 @@ public class Parser {
 		
 	}
 	
-	public void parselxReference(){
+	public void parseIxReference(){
 		parseReference();
 		if(token.kind == TokenKind.LEFTBRACK){
 			acceptIt();
@@ -194,13 +194,13 @@ public class Parser {
 		 * 		while (Expression) Statement
 		 */
 		
-		if(token.kind == TokenKind.LEFTBRACE){
+		if(token.kind == TokenKind.LEFTBRACE){//{Statement*}
 			acceptIt();
 			while(token.kind != TokenKind.RIGHTBRACE){
 				parseStatement();
 			}
 			accept(TokenKind.RIGHTBRACE);
-		}else if(token.kind == TokenKind.IFKEY){
+		}else if(token.kind == TokenKind.IFKEY){//if (Expression) Statement (else Statement)?
 			acceptIt();
 			accept(TokenKind.LEFTPARA);
 			parseExpression();
@@ -210,7 +210,7 @@ public class Parser {
 				acceptIt();
 				parseStatement();
 			}
-		}else if(token.kind == TokenKind.WHILEKEY){
+		}else if(token.kind == TokenKind.WHILEKEY){//while (Expression) Statement
 			acceptIt();
 			accept(TokenKind.LEFTPARA);
 			parseExpression();
@@ -224,18 +224,23 @@ public class Parser {
 			parseExpression();
 			accept(TokenKind.SEMICOLON);
 		}else if(token.kind == TokenKind.THISKEY){
-			parseReference();
+			parseIxReference();
 			if(token.kind == TokenKind.LEFTPARA){ //Reference ( ArguementList? );
 				acceptIt();
 				parseArgumentList();
 				accept(TokenKind.RIGHTPARA);
 				accept(TokenKind.SEMICOLON);
 			}else{//lxReference = Expression;
+				/*
+				 * as per pa2 instructions,
+				 * removed parsing restrictions that prevented
+				 * lxReference from being used for method invocation
 				if(token.kind == TokenKind.LEFTBRACK){
 					acceptIt();
 					parseExpression();
 					accept(TokenKind.RIGHTBRACK);
 				}
+				*/
 				accept(TokenKind.ASSIGNOP);
 				parseExpression();
 				accept(TokenKind.SEMICOLON);
@@ -249,6 +254,11 @@ public class Parser {
 				}
 			}else if(token.kind == TokenKind.ID){//Student student = George;
 				acceptIt();
+				accept(TokenKind.ASSIGNOP);
+				parseExpression();
+				accept(TokenKind.SEMICOLON);
+				return;
+				
 			}
 			if(token.kind == TokenKind.LEFTPARA){ //Reference ( ArguementList? );
 				acceptIt();
@@ -317,16 +327,14 @@ public class Parser {
 				
 			}
 		}else if((token.kind == TokenKind.ID) || (token.kind == TokenKind.THISKEY)){
-			parseReference();
-			if(token.kind == TokenKind.LEFTBRACK){
-				acceptIt();
-				parseExpression();
-				accept(TokenKind.RIGHTBRACK);
-			}else if(token.kind == TokenKind.LEFTPARA){
+			parseIxReference(); //removed restriction on IxReference
+			if(token.kind == TokenKind.LEFTPARA){
 				acceptIt();
 				parseArgumentList();
 				accept(TokenKind.RIGHTPARA);
 			}
+		}else{
+			parseError("'" + token.spelling +  "' is not a valid way to start an expression");
 		}//end of "first" expression
 		
 		if((token.kind == TokenKind.BI_ARITH) || (token.kind == TokenKind.BI_LOGICAL) 

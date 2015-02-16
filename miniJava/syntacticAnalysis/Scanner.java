@@ -71,8 +71,12 @@ public class Scanner {
 			takeIt();
 			return TokenKind.RIGHTPARA;
 		case '-':
-			takeIt();
-			return TokenKind.NEGATION;
+			if(nextChar == '-'){
+				scanError("'--' is not a valid operation in miniJava");
+				return TokenKind.ERROR;
+			}else{
+				return TokenKind.NEGATION;
+			}
 		case '+':
 		case '*':
 			takeIt();
@@ -124,7 +128,7 @@ public class Scanner {
 			}
 		case '/':
 			if(nextChar == '/'){
-				while(currentChar != '\n'){
+				while((currentChar != '\n') && (currentChar != '\r')){
 					takeIt();
 				}
 				takeIt();//here: '\n' is taken
@@ -143,6 +147,9 @@ public class Scanner {
 							takeIt();
 							return TokenKind.COMMENT;
 						}
+					}else if(currentChar == '\u0003'){
+						scanError("Unterminated block comment");
+						return TokenKind.ERROR;
 					}
 					
 					takeIt();
