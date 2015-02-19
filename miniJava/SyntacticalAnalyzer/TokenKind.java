@@ -1,4 +1,4 @@
-package miniJava.syntacticAnalysis;
+package miniJava.SyntacticalAnalyzer;
 
 /**
  *   TokenKind is a simple enum of the different kinds of tokens

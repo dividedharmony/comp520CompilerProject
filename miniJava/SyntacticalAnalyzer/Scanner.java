@@ -1,4 +1,4 @@
-package miniJava.syntacticAnalysis;
+package miniJava.SyntacticalAnalyzer;
 import miniJava.ErrorReporter;
 
 import java.io.IOException;
@@ -41,8 +41,6 @@ public class Scanner {
 	
 	public TokenKind scanToken(){
 		switch(currentChar){
-		case '\u0003':
-			return TokenKind.EOT;
 		case ';':
 			takeIt();
 			return TokenKind.SEMICOLON;
@@ -71,12 +69,8 @@ public class Scanner {
 			takeIt();
 			return TokenKind.RIGHTPARA;
 		case '-':
-			if(nextChar == '-'){
-				scanError("'--' is not a valid operation in miniJava");
-				return TokenKind.ERROR;
-			}else{
-				return TokenKind.NEGATION;
-			}
+			takeIt();
+			return TokenKind.NEGATION;
 		case '+':
 		case '*':
 			takeIt();
@@ -128,35 +122,20 @@ public class Scanner {
 			}
 		case '/':
 			if(nextChar == '/'){
-				while((currentChar != '\n') && (currentChar != '\r')){
+				while(currentChar != '\n'){
 					takeIt();
 				}
 				takeIt();//here: '\n' is taken
 				return TokenKind.COMMENT;
 			}else if(nextChar == '*'){
-				
-				takeIt();// here: '/' is taken
-				takeIt();// here: '*' is taken
-				/*
-				 * this is what a block comment looks like
-				 */
-				while(true){
-					if(currentChar == '*'){
-						if(nextChar == '/'){
-							takeIt();
-							takeIt();
-							return TokenKind.COMMENT;
-						}
-					}else if(currentChar == '\u0003'){
-						scanError("Unterminated block comment");
-						return TokenKind.ERROR;
-					}
-					
-					takeIt();
+				while( (currentChar != '*') || (nextChar != '/')){
+					takeIt(); //body of comment will be here
 				}
+				takeIt();// here: '*' is taken
+				takeIt();// here: '/' is taken
 			}else{
-				takeIt();
-				return TokenKind.BI_ARITH;
+				scanError("Invalid use of a '/' character");
+				return TokenKind.ERROR;
 			}
 		case '0': case '1': case '2': case '3': case '4': case '5':
 		case '6': case '7': case '8': case '9':
@@ -271,8 +250,6 @@ public class Scanner {
 			readChar();
 		}else if(nextChar == '\u0003'){
 			currentChar = nextChar;
-		}else{
-			currentChar = '\u0003';
 		}
 	}
 	
@@ -284,11 +261,9 @@ public class Scanner {
 	private void readNextChar(){
 		try{
 			int c = this.inputStream.read();
-			
-			if(c == (-1)){
+			nextChar = (char) c;
+			if(c == -1){
 				nextChar = '\u0003';
-			}else{
-				nextChar = (char) c;
 			}
 			
 		}catch(IOException e){

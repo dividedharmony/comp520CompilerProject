@@ -1,4 +1,4 @@
-package miniJava.syntacticAnalysis;
+package miniJava.SyntacticalAnalyzer;
 
 
 /**

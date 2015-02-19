@@ -4,10 +4,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 
-import miniJava.syntacticAnalysis.Parser;
-import miniJava.syntacticAnalysis.Scanner;
-
-
+import miniJava.SyntacticalAnalyzer.*;
 
 /**
  * 
