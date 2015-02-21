@@ -5,7 +5,7 @@ package miniJava.SyntacticAnalyzer;
 public class SourceFile {
 	
 	public static final char EOL = '\n';
-	public static final char EOT = '\u0000';
+	public static final char EOT = '\u0003';
 	
 	java.io.File sourceFile;
 	java.io.FileInputStream source;
