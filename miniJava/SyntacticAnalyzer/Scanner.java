@@ -1,7 +1,6 @@
 //Part of the PA2 rewrite
 
 package miniJava.SyntacticAnalyzer;
-import java.io.IOException;
 
 import miniJava.ErrorReporter;
 
@@ -29,9 +28,11 @@ public class Scanner {
 			skipIt();
 		}
 		SourcePosition pos = new SourcePosition();
+		pos.start = sourceFile.getCurrentLine();
 		currentSpelling = new StringBuilder();
 		
 		TokenKind kind = scanToken();
+		pos.finish = sourceFile.getCurrentLine();
 		
 		return new Token(kind, currentSpelling.toString(), pos);
 	}

@@ -38,10 +38,10 @@ public class SourceFile {
 		    catch (java.io.IOException s) {
 		      return EOT;
 		    }
-		  }
+	}
 
-		  int getCurrentLine() {
-		    return currentLine;
-		  }
+	int getCurrentLine() {
+		return currentLine;
+	}
 
 }
