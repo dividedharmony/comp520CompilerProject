@@ -10,10 +10,10 @@ import miniJava.SyntacticAnalyzer.SourcePosition;
 public class MethodDecl extends MemberDecl {
 	
 	public MethodDecl(MemberDecl md, ParameterDeclList pl, StatementList sl, Expression e, SourcePosition posn){
-    super(md,posn);
-    parameterDeclList = pl;
-    statementList = sl;
-    returnExp = e;
+		super(md,posn);
+		parameterDeclList = pl;
+		statementList = sl;
+		returnExp = e;
 	}
 	
 	public <A, R> R visit(Visitor<A, R> v, A o) {

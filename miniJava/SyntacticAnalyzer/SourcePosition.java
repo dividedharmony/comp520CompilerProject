@@ -13,6 +13,10 @@ public class SourcePosition {
 	    start = s;
 	    finish = f;
 	  }
+	  public SourcePosition(SourcePosition s){
+		  this.start = s.start;
+		  this.finish = s.finish;
+	  }
 
 	  public String toString() {
 	    return "(" + start + ", " + finish + ")";
