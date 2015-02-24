@@ -110,6 +110,7 @@ public class Parser {
 		}
 		s.type = parseType();
 		s.name = token.spelling;
+		accept(TokenKind.ID); //field or method name
 		if(token.kind == TokenKind.SEMICOLON){
 			//member is a field
 			acceptIt();
@@ -170,8 +171,6 @@ public class Parser {
 				accept(TokenKind.RIGHTBRACK);
 				finish(tPos);
 				type = new ArrayType(type, tPos);
-			}else{
-				parseError("invalid int Type");
 			}
 		}else if(token.kind == TokenKind.ID){
 			type = new ClassType(new Identifier(token), token.position);
@@ -182,6 +181,10 @@ public class Parser {
 				finish(tPos);
 				type = new ArrayType(type, tPos);
 			}
+		}else if(token.kind == TokenKind.VOIDKEY){
+			acceptIt();
+			finish(tPos);
+			type = new BaseType(TypeKind.VOID, tPos);
 		}else{
 			parseError("Type missing.");
 		}
@@ -198,6 +201,9 @@ public class Parser {
 		while(token.kind != TokenKind.RIGHTPARA){
 			start(pPos);
 			Type t = parseType();
+			if(t.typeKind == TypeKind.VOID){
+				parseError("'void' is not a valid parameter type");
+			}
 			String pName = token.spelling;
 			accept(TokenKind.ID);
 			finish(pPos);
@@ -248,9 +254,10 @@ public class Parser {
 		while(token.kind == TokenKind.PERIOD){
 			acceptIt();
 			Token temp = token;
+			Identifier id = new Identifier(temp);
 			accept(TokenKind.ID);
 			finish(refPos);
-			ref = new QualifiedRef(ref, new Identifier(temp), refPos);
+			ref = new QualifiedRef(ref, id, refPos);
 		}
 		
 		return ref;
@@ -341,7 +348,10 @@ public class Parser {
 			state = new VarDeclStmt(vD, e, sPos);
 			
 		}else if(token.kind == TokenKind.THISKEY){
-			Reference r = parseIxReference(parseReference());
+			Reference r = parseReference();
+			if(token.kind == TokenKind.LEFTBRACK){
+				r = parseIxReference(r);
+			}
 			if(token.kind == TokenKind.LEFTPARA){ //Reference ( ArguementList? );
 				acceptIt();
 				ExprList argList = parseArgumentList();
@@ -383,6 +393,15 @@ public class Parser {
 					finish(sPos);
 					r = new QualifiedRef(r, id, sPos);
 				}
+				if(token.kind == TokenKind.LEFTBRACK){
+					acceptIt();
+					Expression e = parseExpression();
+					accept(TokenKind.RIGHTBRACK);
+					finish(sPos);
+					r = new IndexedRef(r, e, sPos);
+				}
+				
+				//WHY NOT JUST RETURN R?
 			}else if(token.kind == TokenKind.ID){//Student student = George;
 				ClassType type = new ClassType(new Identifier(temp), temp.position);
 				String name = token.spelling;
@@ -398,6 +417,10 @@ public class Parser {
 				state = new VarDeclStmt(vD, e, sPos);
 				return state;//Need to break in order to stop statement here
 				
+			}else{
+				Identifier id = new Identifier(temp);
+				finish(sPos);
+				r = new IdRef(id, sPos);
 			}
 			if(token.kind == TokenKind.LEFTPARA){ //Reference ( ArguementList? );
 				acceptIt();
@@ -459,22 +482,29 @@ public class Parser {
 		 * num | true | false %
 		 * new( id() | int[Expression] | id[Expression] ) %
 		 */
-		
-		Expression e = parseUnaryExpr();
+		Expression e = null;
+		e = parseUnaryExpr();
 		if((token.kind == TokenKind.BI_ARITH) || (token.kind == TokenKind.BI_LOGICAL)
 				|| (token.kind == TokenKind.RELATIONOP) || (token.kind == TokenKind.NEGATION)){
-			OpNode opN = null;
+			OpNode rightMost = null;
 			while((token.kind == TokenKind.BI_ARITH) || (token.kind == TokenKind.BI_LOGICAL)
 				|| (token.kind == TokenKind.RELATIONOP) || (token.kind == TokenKind.NEGATION)){
-				opN = new OpNode(opN);
-				opN.operator = new Operator(token);
+				rightMost = new OpNode(rightMost);
+				rightMost.operator = new Operator(token);
 				acceptIt();
-				opN.leftChild = e;
+				rightMost.leftChild = e;
 				e = parseUnaryExpr();
-				opN.rightChild = e;
-				opN.leftOp.rightOp = opN;
+				rightMost.rightChild = e;
 			}
-			e = parseBinOpExpr(opN);
+			OpNode leftMost = rightMost;
+			for(;;){
+				if(leftMost.leftOp != null){
+					leftMost = leftMost.leftOp;
+				}else{
+					break;
+				}
+			}
+			e = parseBinOpExpr(leftMost, rightMost);
 		}
 		
 		return e;
@@ -483,8 +513,10 @@ public class Parser {
 	///////////////////////////////////////////////////////////////////////
 	///////////		ADDITIONAL PARSE EXPRESSION FUNCTIONS AND CLASSES
 	//////////////////////////////////////////////////////////////////////
+	private class BlankNode{}
 	
-	private class OpNode{
+	
+	private class OpNode extends BlankNode{
 		OpNode leftOp;
 		OpNode rightOp;
 		Operator operator;
@@ -497,27 +529,32 @@ public class Parser {
 			operator = null;
 			leftChild = null;
 			rightChild = null;
+			
+			if(prev != null){
+				prev.rightOp = this;
+			}
 		}
 	}//end OpNode class
 	
 	public Expression parseUnaryExpr(){
+		System.out.println("Current token: " + token.spelling);
 		Expression expr = null;
 		SourcePosition ePos = new SourcePosition();
 		
 		start(ePos);
-		if(token.kind == TokenKind.LEFTPARA){
-			acceptIt();
-			Expression e = parseExpression();
-			accept(TokenKind.RIGHTPARA);
-			finish(ePos);
-			return e;
-		}else if((token.kind == TokenKind.UNILOGICAL) || (token.kind == TokenKind.NEGATION)){//how
+		if((token.kind == TokenKind.UNILOGICAL) || (token.kind == TokenKind.NEGATION)){//how
 			Operator o = new Operator(token);
 			acceptIt();
 			Expression e = parseUnaryExpr();
 			finish(ePos);
 			expr = new UnaryExpr(o, e, ePos);
 			return expr;
+		}else if(token.kind == TokenKind.LEFTPARA){
+			acceptIt();
+			Expression e = parseExpression();
+			accept(TokenKind.RIGHTPARA);
+			finish(ePos);
+			return e;
 		}else if((token.kind == TokenKind.NUM)){
 			Token temp = token;
 			acceptIt();
@@ -577,7 +614,10 @@ public class Parser {
 				return expr;
 			}
 		}else if((token.kind == TokenKind.ID) || (token.kind == TokenKind.THISKEY)){
-			Reference r = parseIxReference(parseReference()); //removed restriction on IxReference
+			Reference r = parseReference(); //removed restriction on IxReference
+			if(token.kind == TokenKind.LEFTBRACK){
+				r = parseIxReference(r);
+			}
 			if(token.kind == TokenKind.LEFTPARA){//Call Expression
 				acceptIt();
 				ExprList eList = parseArgumentList();
@@ -602,235 +642,247 @@ public class Parser {
 	 * @param opN, the right-most operator node given by parseExpression
 	 * @return
 	 */
-	public Expression parseBinOpExpr(OpNode opN){
+	public Expression parseBinOpExpr(OpNode leftMost, OpNode rightMost){
+		System.out.println("Entered BinOp");
 		Expression binExpr = null;
 		Expression e1 = null;
 		Expression e2 = null;
-		OpNode temp = opN;
+		OpNode farLeft = leftMost;
+		//rightMost does not move
 		
-		while(opN != null){//disjunction (loosiest bound) tester
-			if(opN.operator.spelling.equals("||")){
-				Operator o = opN.operator;
-				if(opN.rightOp == null){
-					e1 = opN.rightChild;
-					if(opN.leftOp == null){
-						e2 = opN.leftChild;
+		while(leftMost == rightMost){//disjunction (loosiest bound) tester
+			if(leftMost.operator.spelling.equals("||")){
+				Operator o = leftMost.operator;
+				if(leftMost == farLeft){//ie nothing to the left
+					e1 = leftMost.leftChild;
+					if(leftMost == rightMost){//ie nothing more to the right
+						e2 = leftMost.rightChild;
 						binExpr = new BinaryExpr(o, e1, e2, 
 								new SourcePosition(e1.posn.start, e2.posn.finish));
-					}else{//ie there is a left operator
-						opN = opN.leftOp;
-						opN.rightOp = null;
-						e2 = parseBinOpExpr(opN);
+					}else{//ie there is a right operator
+						e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 						binExpr = new BinaryExpr(o, e1, e2, 
 								new SourcePosition(e1.posn.start, e2.posn.finish));
 					}
-				}else{//ie there is a right operator
-					opN.rightOp.leftOp = null;
-					e1 = parseBinOpExpr(temp);
-					if(opN.leftOp == null){
-						e2 = opN.leftChild;
+				}else{//ie there is an operator more to the left
+					e1 = parseBinOpExpr(farLeft, leftMost.leftOp);
+					if(leftMost == rightMost){//ie there is nothing more to the right
+						e2 = rightMost.rightChild;
 						binExpr = new BinaryExpr(o, e1, e2, 
 								new SourcePosition(e1.posn.start, e2.posn.finish));
-					}else{//ie there is a left operator
-						opN = opN.leftOp;
-						opN.rightOp = null;
-						e2 = parseBinOpExpr(opN);
+					}else{//ie there is a more right operator
+						e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 						binExpr = new BinaryExpr(o, e1, e2, 
 								new SourcePosition(e1.posn.start, e2.posn.finish));
 					}
 				}
+				return binExpr;
 		}else{
-			opN = opN.leftOp; //procede to the next operator and test again
+			if(rightMost != leftMost){
+				rightMost = rightMost.leftOp;
+			}else{
+				break;
+			}
 		}//end "||" tester
 		
 	}//end while loop
+		
+		
+		leftMost = farLeft;
 	
-	opN = temp;
-	
-	while(opN != null){//conjunction test
-		if(opN.operator.spelling.equals("&&")){
-			Operator o = opN.operator;
-			if(opN.rightOp == null){
-				e1 = opN.rightChild;
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+		
+	while(rightMost != null){//conjunction test
+		if(rightMost.operator.spelling.equals("&&")){
+			Operator o = leftMost.operator;
+			if(leftMost == farLeft){//ie nothing to the left
+				e1 = leftMost.leftChild;
+				if(leftMost == rightMost){//ie nothing more to the right
+					e2 = leftMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
-			}else{//ie there is a right operator
-				opN.rightOp.leftOp = null;
-				e1 = parseBinOpExpr(temp);
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+			}else{//ie there is an operator more to the left
+				e1 = parseBinOpExpr(farLeft, leftMost.leftOp);
+				if(leftMost == rightMost){//ie there is nothing more to the right
+					e2 = rightMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a more right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
 			}
+			return binExpr;
 		}else{
-			opN = opN.leftOp; //procede to the next operator and test again
+			if(rightMost != leftMost){
+				rightMost = rightMost.leftOp;
+			}else{
+				break;
+			}
 		}//end "&&" tester
 	
 	}//end while loop
 	
-	while(opN != null){//equality tester
-		if(opN.operator.spelling.equals("==") || (opN.operator.spelling.equals("!="))){
-			Operator o = opN.operator;
-			if(opN.rightOp == null){
-				e1 = opN.rightChild;
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+	leftMost = farLeft;
+	
+	while(rightMost != null){//equality tester
+		if(rightMost.operator.spelling.equals("==") || (rightMost.operator.spelling.equals("!="))){
+			Operator o = leftMost.operator;
+			if(leftMost == farLeft){//ie nothing to the left
+				e1 = leftMost.leftChild;
+				if(leftMost == rightMost){//ie nothing more to the right
+					e2 = leftMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
-			}else{//ie there is a right operator
-				opN.rightOp.leftOp = null;
-				e1 = parseBinOpExpr(temp);
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+			}else{//ie there is an operator more to the left
+				e1 = parseBinOpExpr(farLeft, leftMost.leftOp);
+				if(leftMost == rightMost){//ie there is nothing more to the right
+					e2 = rightMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a more right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
 			}
+			return binExpr;
 		}else{
-			opN = opN.leftOp; //procede to the next operator and test again
+			if(rightMost != leftMost){
+				rightMost = rightMost.leftOp;
+			}else{
+				break;
+			}
 		}//end "==" or "!=" tester
 	
 	}//end while loop
 	
+	leftMost = farLeft;
 	
-	while(opN != null){//relation operator tester
-		if(opN.operator.spelling.equals(">") || (opN.operator.spelling.equals("<"))
-				|| (opN.operator.spelling.equals(">=")) || (opN.operator.spelling.equals("<="))){
-			Operator o = opN.operator;
-			if(opN.rightOp == null){
-				e1 = opN.rightChild;
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+	while(rightMost != null){//relation operator tester
+		if(rightMost.operator.spelling.equals(">") || (rightMost.operator.spelling.equals("<"))
+				|| (rightMost.operator.spelling.equals(">="))
+				|| (rightMost.operator.spelling.equals("<="))){
+			Operator o = leftMost.operator;
+			if(leftMost == farLeft){//ie nothing to the left
+				e1 = leftMost.leftChild;
+				if(leftMost == rightMost){//ie nothing more to the right
+					e2 = leftMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
-			}else{//ie there is a right operator
-				opN.rightOp.leftOp = null;
-				e1 = parseBinOpExpr(temp);
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+			}else{//ie there is an operator more to the left
+				e1 = parseBinOpExpr(farLeft, leftMost.leftOp);
+				if(leftMost == rightMost){//ie there is nothing more to the right
+					e2 = rightMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a more right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
 			}
+			return binExpr;
 		}else{
-			opN = opN.leftOp; //procede to the next operator and test again
+			if(rightMost != leftMost){
+				rightMost = rightMost.leftOp;
+			}else{
+				break;
+			}
 		}//end "==" or "!=" tester
 	
 	}//end while loop
 	
-	while(opN != null){//additive tester
-		if(opN.operator.spelling.equals("+") || (opN.operator.spelling.equals("-"))){
-			Operator o = opN.operator;
-			if(opN.rightOp == null){
-				e1 = opN.rightChild;
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+	leftMost = farLeft;
+	
+	while(rightMost != null){//additive tester
+		if(rightMost.operator.spelling.equals("+") || (rightMost.operator.spelling.equals("-"))){
+			Operator o = leftMost.operator;
+			if(leftMost == farLeft){//ie nothing to the left
+				e1 = leftMost.leftChild;
+				if(leftMost == rightMost){//ie nothing more to the right
+					e2 = leftMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
-			}else{//ie there is a right operator
-				opN.rightOp.leftOp = null;
-				e1 = parseBinOpExpr(temp);
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+			}else{//ie there is an operator more to the left
+				e1 = parseBinOpExpr(farLeft, leftMost.leftOp);
+				if(leftMost == rightMost){//ie there is nothing more to the right
+					e2 = rightMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a more right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
 			}
+			return binExpr;
 		}else{
-			opN = opN.leftOp; //procede to the next operator and test again
-		}//end "==" or "!=" tester
+			if(rightMost != leftMost){
+				rightMost = rightMost.leftOp;
+			}else{
+				break;
+			}
+		}//end "+" or "-" tester
 	
 	}//end while loop
 	
-	while(opN != null){//multiplicative tester
-		if(opN.operator.spelling.equals("*") || (opN.operator.spelling.equals("/"))){
-			Operator o = opN.operator;
-			if(opN.rightOp == null){
-				e1 = opN.rightChild;
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+	leftMost = farLeft;
+	
+	while(rightMost != null){//multiplicative tester
+		if(rightMost.operator.spelling.equals("*") || (rightMost.operator.spelling.equals("/"))){
+			Operator o = leftMost.operator;
+			if(leftMost == farLeft){//ie nothing to the left
+				e1 = leftMost.leftChild;
+				if(leftMost == rightMost){//ie nothing more to the right
+					e2 = leftMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
-			}else{//ie there is a right operator
-				opN.rightOp.leftOp = null;
-				e1 = parseBinOpExpr(temp);
-				if(opN.leftOp == null){
-					e2 = opN.leftChild;
+			}else{//ie there is an operator more to the left
+				e1 = parseBinOpExpr(farLeft, leftMost.leftOp);
+				if(leftMost == rightMost){//ie there is nothing more to the right
+					e2 = rightMost.rightChild;
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
-				}else{//ie there is a left operator
-					opN = opN.leftOp;
-					opN.rightOp = null;
-					e2 = parseBinOpExpr(opN);
+				}else{//ie there is a more right operator
+					e2 = parseBinOpExpr(leftMost.rightOp, rightMost);
 					binExpr = new BinaryExpr(o, e1, e2, 
 							new SourcePosition(e1.posn.start, e2.posn.finish));
 				}
 			}
+			return binExpr;
 		}else{
-			opN = opN.leftOp; //procede to the next operator and test again
-		}//end "==" or "!=" tester
+			if(rightMost != leftMost){
+				rightMost = rightMost.leftOp;
+			}else{
+				break;
+			}
+		}//end "*" or "/" tester
 	
 	}//end while loop
 	
@@ -843,10 +895,7 @@ public class Parser {
 		
 }//end parseBinOpExpr
 	
-	
-	
-	
-	
+
 	////////////// HELPER FUNCTIONS ///////////////
 	
 	// start records the position of the start of a phrase.
@@ -878,7 +927,7 @@ public class Parser {
 	 * @throws SyntaxError
 	 */
 	private void parseError(String message) throws SyntaxError{
-		errorReporter.reportError("Parse error: " + message + " at line " + token.position);
+		errorReporter.reportError("Parse error: " + message + " at line " + token.position.start);
 		throw new SyntaxError();
 	}
 	

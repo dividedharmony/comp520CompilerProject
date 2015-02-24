@@ -1,6 +1,7 @@
 //Part of the PA2 rewrite
 
 package miniJava;
+import miniJava.AbstractSyntaxTrees.*;
 import miniJava.SyntacticAnalyzer.*;
 
 /**
@@ -34,16 +35,25 @@ public class Compiler {
 		
 		reporter = new ErrorReporter();
 		scanner = new Scanner(source, reporter);
+		parser = new Parser(scanner, reporter);
+		AST ast = null;
 		
-		for(int i=0; i<5; i++){
-			System.out.println(scanner.scan().spelling);
-		}
+		System.out.println("Beginning scan and parse...");
+		ast = parser.parse();
+		System.out.println("Scan and parse complete!");
+		
+		
 		
 		if(reporter.hasErrors()){
 			System.out.println("INVALID Statement.");
 			System.exit(4);
 		}else{
 			System.out.println("Valid Statement");
+			
+			// traverse AST to construct explicitly parenthesized text representation
+			ASTDisplay display = new ASTDisplay();
+			display.showTree(ast);
+	        
 			System.exit(0);
 		}
 		

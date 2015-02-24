@@ -70,9 +70,11 @@ public class Scanner {
 			return TokenKind.RIGHTPARA;
 		case '-':
 			if(nextChar == '-'){
-				scanError("'--' is not a valid operation in miniJava");
-				return TokenKind.ERROR;
+				takeIt();
+				scanError("The '--' operator is not allowed in miniJava");
+				return TokenKind.NEGATION;
 			}else{
+				takeIt();
 				return TokenKind.NEGATION;
 			}
 		case '+':
@@ -117,7 +119,7 @@ public class Scanner {
 			}
 		case '|':
 			if(nextChar != '|'){
-				scanError("Expected character '&' not found");
+				scanError("Expected character '|' not found");
 				return TokenKind.ERROR;
 			}else{
 				takeIt();
@@ -127,6 +129,9 @@ public class Scanner {
 		case '/':
 			if(nextChar == '/'){
 				while((currentChar != '\n') && (currentChar != '\r')){
+					if(currentChar == '\u0003'){
+						return TokenKind.EOT;
+					}
 					takeIt();
 				}
 				takeIt();//here: '\n' is taken
